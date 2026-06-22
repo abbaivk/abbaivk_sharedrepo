@@ -1,0 +1,78 @@
+{
+  "output": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/Airtable MCP Skill - Cisco Summary - Key Benefits.pptx",
+  "outputBytes": 37120,
+  "slideCount": 6,
+  "slideSize": {
+    "width": 1280,
+    "height": 720
+  },
+  "previewDir": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview",
+  "previewPaths": [
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-01.png",
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-02.png",
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-03.png",
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-04.png",
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-05.png",
+    "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/preview/slide-06.png"
+  ],
+  "layoutDir": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout",
+  "layoutResults": [
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-01.layout.json"
+    },
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-02.layout.json"
+    },
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-03.layout.json"
+    },
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-04.layout.json"
+    },
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-05.layout.json"
+    },
+    {
+      "layoutPath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/layout/slide-06.layout.json"
+    }
+  ],
+  "contactSheet": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/contact-sheet.png",
+  "slides": [
+    {
+      "index": 1,
+      "requestedSlideNumber": 1,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-01.mjs",
+      "exportName": "slide01"
+    },
+    {
+      "index": 2,
+      "requestedSlideNumber": 2,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-02.mjs",
+      "exportName": "slide02"
+    },
+    {
+      "index": 3,
+      "requestedSlideNumber": 3,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-03.mjs",
+      "exportName": "slide03"
+    },
+    {
+      "index": 4,
+      "requestedSlideNumber": 4,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-04.mjs",
+      "exportName": "slide04"
+    },
+    {
+      "index": 5,
+      "requestedSlideNumber": 5,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-05.mjs",
+      "exportName": "slide05"
+    },
+    {
+      "index": 6,
+      "requestedSlideNumber": 6,
+      "modulePath": "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp/outputs/manual-20260611-airtable-mcp-benefits/presentations/airtable-mcp-benefits/slides/slide-06.mjs",
+      "exportName": "slide06"
+    }
+  ]
+}

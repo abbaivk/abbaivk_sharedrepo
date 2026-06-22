@@ -1,0 +1,10 @@
+.DS_Store
+*.log
+.env
+.env.*
+airtable-mcp.config.json
+config.json
+.github-enterprise.json
+github-enterprise.json
+node_modules/
+build/node_modules

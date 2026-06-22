@@ -1,0 +1,13 @@
+interface:
+  display_name: "Airtable MCP"
+  short_description: "Install, configure, and use Airtable MCP"
+  default_prompt: "Use $airtable-mcp to connect an AI tool to Airtable through the official MCP server."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "airtable"
+      description: "Official Airtable hosted MCP server"
+      transport: "streamable_http"
+      url: "https://mcp.airtable.com/mcp"
+policy:
+  allow_implicit_invocation: true
