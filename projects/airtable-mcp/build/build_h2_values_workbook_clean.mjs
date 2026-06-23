@@ -4,7 +4,7 @@ import path from "node:path";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const projectDir = "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp";
-const proxy = "/Users/abbaivk/.codex/bin/airtable-mcp-keychain-proxy";
+const proxy = path.join(projectDir, "build", "airtable-mcp-proxy.mjs");
 const env = { ...process.env, AIRTABLE_MCP_CONFIG_FILE: path.join(projectDir, "config.json") };
 const outputDir = path.join(projectDir, "outputs");
 const outputPath = path.join(outputDir, "H2 Values - Linked Top Level Methods.xlsx");

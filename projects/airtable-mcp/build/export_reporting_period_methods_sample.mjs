@@ -1,18 +1,14 @@
-import { spawnSync } from "node:child_process";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const projectDir = "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp";
-const proxy = "/Users/abbaivk/.codex/bin/airtable-mcp-keychain-proxy";
-const bundledNodeBin = "/Users/abbaivk/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin";
-const env = {
-  ...process.env,
-  AIRTABLE_MCP_CONFIG_FILE: path.join(projectDir, "config.json"),
-  PATH: `${bundledNodeBin}:${process.env.PATH || ""}`,
-};
 const outputDir = path.join(projectDir, "outputs");
 const baseId = "appps1eduhJZPnFHD";
+const endpoint = "https://mcp.airtable.com/mcp";
+const tokenConfig = JSON.parse(await fs.readFile(path.join(projectDir, "config.json"), "utf8"));
+const airtableToken = tokenConfig.pat || tokenConfig.AIRTABLE_MCP_PAT || tokenConfig.AIRTABLE_PERSONAL_ACCESS_TOKEN;
+if (!airtableToken) throw new Error("Missing Airtable token in config.json");
 const reportingPeriod = process.argv.slice(2).join(" ").trim() || "Jun 4 (June MBR)";
 const filePeriod = reportingPeriod
   .replace(/[()]/g, "")
@@ -22,37 +18,52 @@ const filePeriod = reportingPeriod
 const outputPath = path.join(outputDir, `${filePeriod} Methods Sample - Requested Columns.xlsx`);
 const bodyFontSize = 12;
 const headingFontSize = 13;
+const palette = {
+  header: "#1F4E78",
+  h2: "#245B89",
+  topLevel: "#D9EAF7",
+  current: "#EAF5F1",
+  previous: "#FFF4D8",
+  date: "#EEF2F6",
+  white: "#FFFFFF",
+  alternate: "#F7F9FB",
+  text: "#1F2933",
+  muted: "#52616F",
+};
 
-function callTool(name, args, id = 2) {
-  const messages = [
-    {
-      jsonrpc: "2.0",
-      id: 1,
-      method: "initialize",
-      params: {
-        protocolVersion: "2025-06-18",
-        capabilities: {},
-        clientInfo: { name: "reporting-period-methods-sample", version: "0.1.0" },
-      },
+function parseMcpText(text) {
+  const trimmed = text.trim();
+  if (!trimmed) return null;
+  if (trimmed.startsWith("event:") || trimmed.startsWith("data:")) {
+    const dataLines = trimmed
+      .split(/\r?\n/)
+      .filter((line) => line.startsWith("data:"))
+      .map((line) => line.slice(5).trim());
+    return JSON.parse(dataLines.join("\n"));
+  }
+  return JSON.parse(trimmed);
+}
+
+async function mcp(method, params, id = 1) {
+  const response = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${airtableToken}`,
+      "Content-Type": "application/json",
+      Accept: "application/json, text/event-stream",
     },
-    { jsonrpc: "2.0", method: "notifications/initialized", params: {} },
-    { jsonrpc: "2.0", id, method: "tools/call", params: { name, arguments: args } },
-  ];
-  const result = spawnSync(proxy, {
-    input: `${messages.map((message) => JSON.stringify(message)).join("\n")}\n`,
-    env,
-    encoding: "utf8",
-    maxBuffer: 150 * 1024 * 1024,
+    body: JSON.stringify({ jsonrpc: "2.0", id, method, params }),
   });
-  if (result.status !== 0) throw new Error(result.stderr || `proxy exited ${result.status}`);
-  const response = result.stdout
-    .trim()
-    .split(/\n+/)
-    .filter(Boolean)
-    .map((line) => JSON.parse(line))
-    .find((message) => message.id === id);
-  if (response?.error) throw new Error(JSON.stringify(response.error));
-  return response.result?.structuredContent || response.result;
+  const text = await response.text();
+  if (!response.ok) throw new Error(`Airtable MCP HTTP ${response.status}: ${text.slice(0, 1000)}`);
+  const payload = parseMcpText(text);
+  if (payload?.error) throw new Error(JSON.stringify(payload.error));
+  return payload?.result;
+}
+
+async function callTool(name, args) {
+  const result = await mcp("tools/call", { name, arguments: args });
+  return result?.structuredContent || result;
 }
 
 function flattenHuman(value) {
@@ -145,11 +156,11 @@ function linkedIds(value) {
   return [];
 }
 
-function recordsForTable(tableId, fieldIds) {
+async function recordsForTable(tableId, fieldIds) {
   const records = [];
   let cursor;
   do {
-    const page = callTool("list_records_for_table", {
+    const page = await callTool("list_records_for_table", {
       baseId,
       tableId,
       fieldIds: unique(fieldIds),
@@ -177,7 +188,13 @@ function latestBy(rows, keyFn) {
   return [...out.values()];
 }
 
-const schema = callTool("list_tables_for_base", { baseId });
+await mcp("initialize", {
+  protocolVersion: "2025-06-18",
+  capabilities: {},
+  clientInfo: { name: "reporting-period-methods-sample", version: "0.1.0" },
+});
+
+const schema = await callTool("list_tables_for_base", { baseId });
 const h2Table = tableByName(schema, "CX FY26 H2 Values");
 const topTable = tableByName(schema, "Method Top Level");
 const subTable = tableByName(schema, "Supporting Methods");
@@ -241,11 +258,13 @@ const sm = {
   subLink: fieldId(smFields, "Supporting Methods"),
 };
 
-const h2Records = recordsForTable(h2Table.id, Object.values(h2));
-const topRecords = recordsForTable(topTable.id, Object.values(top));
-const subRecords = recordsForTable(subTable.id, Object.values(sub));
-const allTlUpdateRecords = recordsForTable(tlUpdateTable.id, Object.values(tl));
-const allSmUpdateRecords = recordsForTable(smUpdateTable.id, Object.values(sm));
+const [h2Records, topRecords, subRecords, allTlUpdateRecords, allSmUpdateRecords] = await Promise.all([
+  recordsForTable(h2Table.id, Object.values(h2)),
+  recordsForTable(topTable.id, Object.values(top)),
+  recordsForTable(subTable.id, Object.values(sub)),
+  recordsForTable(tlUpdateTable.id, Object.values(tl)),
+  recordsForTable(smUpdateTable.id, Object.values(sm)),
+]);
 
 const h2ById = new Map(h2Records.map((record) => [record.id, record]));
 const topById = new Map(topRecords.map((record) => [record.id, record]));
@@ -386,12 +405,21 @@ function setValues(sheet, startCell, matrix) {
 
 function styleHeader(range) {
   range.format = {
-    fill: "#1F4E78",
+    fill: palette.header,
     font: { color: "#FFFFFF", bold: true, size: headingFontSize },
     horizontalAlignment: "center",
     verticalAlignment: "center",
     wrapText: true,
   };
+}
+
+function statusColors(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("off track") || normalized.includes("delayed")) return { fill: "#FDECEC", text: "#A12622" };
+  if (normalized.includes("risk")) return { fill: "#FFF4D8", text: "#8A5A00" };
+  if (normalized.includes("complete") || normalized.includes("done")) return { fill: "#E6F0FF", text: "#1F4E78" };
+  if (normalized.includes("track")) return { fill: "#E8F5E9", text: "#1B6B35" };
+  return { fill: "#EEF2F6", text: "#52616F" };
 }
 
 function setColumnWidths(sheet, widths) {
@@ -405,7 +433,178 @@ function setColumnWidths(sheet, widths) {
   }
 }
 
-function writeSheet(name, headers, rows, widths) {
+function fullRowFormat(sheet, rowNumber, lastCol, format) {
+  sheet.getRange(`A${rowNumber}:${lastCol}${rowNumber}`).format = {
+    font: { size: bodyFontSize, color: palette.text },
+    wrapText: true,
+    verticalAlignment: "top",
+    ...format,
+  };
+}
+
+function applyWorkbookStandardStyles(sheet, headers, rowMeta, styleConfig) {
+  const lastCol = numToCol(headers.length);
+  let detailIndex = 0;
+  rowMeta.forEach((meta, index) => {
+    const rowNumber = index + 2;
+    if (meta.type === "h2") {
+      fullRowFormat(sheet, rowNumber, lastCol, {
+        fill: palette.h2,
+        font: { color: "#FFFFFF", bold: true, size: headingFontSize },
+        horizontalAlignment: "left",
+        verticalAlignment: "center",
+        wrapText: true,
+      });
+      return;
+    }
+    if (meta.type === "top") {
+      fullRowFormat(sheet, rowNumber, lastCol, {
+        fill: palette.topLevel,
+        font: { color: "#173A56", bold: true, size: bodyFontSize },
+        horizontalAlignment: "left",
+        verticalAlignment: "center",
+        wrapText: true,
+      });
+      return;
+    }
+
+    fullRowFormat(sheet, rowNumber, lastCol, {
+      fill: detailIndex % 2 === 0 ? palette.white : palette.alternate,
+      font: { size: bodyFontSize, color: palette.text },
+    });
+    detailIndex += 1;
+
+    if (styleConfig.currentRange) {
+      sheet.getRange(`${styleConfig.currentRange[0]}${rowNumber}:${styleConfig.currentRange[1]}${rowNumber}`).format = {
+        fill: palette.current,
+        font: { size: bodyFontSize, color: palette.text },
+        wrapText: true,
+        verticalAlignment: "top",
+      };
+    }
+    if (styleConfig.previousRange) {
+      sheet.getRange(`${styleConfig.previousRange[0]}${rowNumber}:${styleConfig.previousRange[1]}${rowNumber}`).format = {
+        fill: palette.previous,
+        font: { size: bodyFontSize, color: palette.text },
+        wrapText: true,
+        verticalAlignment: "top",
+      };
+    }
+    if (styleConfig.dateCol) {
+      sheet.getRange(`${styleConfig.dateCol}${rowNumber}`).format = {
+        fill: palette.date,
+        font: { size: bodyFontSize, color: palette.muted },
+        wrapText: true,
+        verticalAlignment: "top",
+      };
+    }
+    for (const [column, value] of [
+      [styleConfig.currentStatusCol, meta.currentStatus],
+      [styleConfig.previousStatusCol, meta.previousStatus],
+    ]) {
+      if (!column) continue;
+      const colors = statusColors(value);
+      sheet.getRange(`${column}${rowNumber}`).format = {
+        fill: colors.fill,
+        font: { color: colors.text, bold: true, size: bodyFontSize },
+        horizontalAlignment: "center",
+        verticalAlignment: "center",
+        wrapText: true,
+      };
+    }
+    if (styleConfig.methodCol) {
+      sheet.getRange(`${styleConfig.methodCol}${rowNumber}`).format = {
+        font: { size: bodyFontSize, color: palette.text, bold: true },
+        wrapText: true,
+        verticalAlignment: "top",
+      };
+    }
+  });
+}
+
+function blankRow(width) {
+  return Array.from({ length: width }, () => "");
+}
+
+function buildTopLevelSheetRows(rows) {
+  const sheetRows = [];
+  const meta = [];
+  let currentH2Key = null;
+  for (const row of rows) {
+    const h2Key = `${row.order || ""}|${row.h2Value}`;
+    if (h2Key !== currentH2Key) {
+      const groupRow = blankRow(13);
+      groupRow[0] = row.order;
+      groupRow[1] = row.h2Value;
+      sheetRows.push(groupRow);
+      meta.push({ type: "h2" });
+      currentH2Key = h2Key;
+    }
+    sheetRows.push([
+      row.order,
+      row.h2Value,
+      row.topMethod,
+      row.reportingPeriod,
+      row.methodOwner,
+      row.statusOwner,
+      row.status,
+      row.actual,
+      row.commentary,
+      row.previousStatus,
+      row.previousActual,
+      row.previousCommentary,
+      row.updateDate,
+    ]);
+    meta.push({ type: "detail", currentStatus: row.status, previousStatus: row.previousStatus });
+  }
+  return { rows: sheetRows, meta };
+}
+
+function buildSubLevelSheetRows(rows) {
+  const sheetRows = [];
+  const meta = [];
+  let currentH2Key = null;
+  let currentTopMethod = null;
+  for (const row of rows) {
+    const h2Key = `${row.order || ""}|${row.h2Value}`;
+    if (h2Key !== currentH2Key) {
+      const groupRow = blankRow(14);
+      groupRow[0] = row.order;
+      groupRow[1] = row.h2Value;
+      sheetRows.push(groupRow);
+      meta.push({ type: "h2" });
+      currentH2Key = h2Key;
+      currentTopMethod = null;
+    }
+    if (row.topMethod !== currentTopMethod) {
+      const topRow = blankRow(14);
+      topRow[2] = `Top-Level Method: ${row.topMethod}`;
+      sheetRows.push(topRow);
+      meta.push({ type: "top" });
+      currentTopMethod = row.topMethod;
+    }
+    sheetRows.push([
+      row.order,
+      row.h2Value,
+      row.topMethod,
+      row.subMethod,
+      row.reportingPeriod,
+      row.supportingOwner,
+      row.statusOwner,
+      row.status,
+      row.actual,
+      row.commentary,
+      row.previousStatus,
+      row.previousActual,
+      row.previousCommentary,
+      row.updateDate,
+    ]);
+    meta.push({ type: "detail", currentStatus: row.status, previousStatus: row.previousStatus });
+  }
+  return { rows: sheetRows, meta };
+}
+
+function writeSheet(name, headers, rows, widths, rowMeta, styleConfig) {
   const sheet = workbook.worksheets.add(name);
   setValues(sheet, "A1", [headers]);
   styleHeader(sheet.getRange(`A1:${numToCol(headers.length)}1`));
@@ -414,8 +613,12 @@ function writeSheet(name, headers, rows, widths) {
     sheet.freezePanes = { rows: 1 };
   } catch {}
   setColumnWidths(sheet, widths);
+  applyWorkbookStandardStyles(sheet, headers, rowMeta, styleConfig);
   styleHeader(sheet.getRange(`A1:${numToCol(headers.length)}1`));
 }
+
+const topSheetRows = buildTopLevelSheetRows(topRows);
+const subSheetRows = buildSubLevelSheetRows(subRows);
 
 writeSheet(
   "Top-Level Methods",
@@ -434,22 +637,10 @@ writeSheet(
     "Previous Commentary",
     "Status Update Date",
   ],
-  topRows.map((row) => [
-    row.order,
-    row.h2Value,
-    row.topMethod,
-    row.reportingPeriod,
-    row.methodOwner,
-    row.statusOwner,
-    row.status,
-    row.actual,
-    row.commentary,
-    row.previousStatus,
-    row.previousActual,
-    row.previousCommentary,
-    row.updateDate,
-  ]),
+  topSheetRows.rows,
   { A: 85, B: 360, C: 420, D: 180, E: 220, F: 220, G: 150, H: 300, I: 520, J: 150, K: 300, L: 420, M: 170 },
+  topSheetRows.meta,
+  { currentRange: ["G", "I"], currentStatusCol: "G", previousRange: ["J", "L"], previousStatusCol: "J", dateCol: "M", methodCol: "C" },
 );
 
 writeSheet(
@@ -470,23 +661,10 @@ writeSheet(
     "Previous Commentary",
     "Status Update Date",
   ],
-  subRows.map((row) => [
-    row.order,
-    row.h2Value,
-    row.topMethod,
-    row.subMethod,
-    row.reportingPeriod,
-    row.supportingOwner,
-    row.statusOwner,
-    row.status,
-    row.actual,
-    row.commentary,
-    row.previousStatus,
-    row.previousActual,
-    row.previousCommentary,
-    row.updateDate,
-  ]),
+  subSheetRows.rows,
   { A: 85, B: 360, C: 390, D: 430, E: 180, F: 220, G: 220, H: 150, I: 300, J: 520, K: 150, L: 300, M: 420, N: 170 },
+  subSheetRows.meta,
+  { currentRange: ["H", "J"], currentStatusCol: "H", previousRange: ["K", "M"], previousStatusCol: "K", dateCol: "N", methodCol: "D" },
 );
 
 const topInspect = await workbook.inspect({

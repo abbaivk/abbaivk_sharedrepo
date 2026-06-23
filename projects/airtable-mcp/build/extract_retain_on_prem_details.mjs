@@ -4,7 +4,7 @@ import path from "node:path";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const projectDir = "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp";
-const proxy = "/Users/abbaivk/.codex/bin/airtable-mcp-keychain-proxy";
+const proxy = path.join(projectDir, "build", "airtable-mcp-proxy.mjs");
 const env = { ...process.env, AIRTABLE_MCP_CONFIG_FILE: path.join(projectDir, "config.json") };
 const outputDir = path.join(projectDir, "outputs");
 const baseId = "appps1eduhJZPnFHD";
@@ -19,6 +19,15 @@ const reportTitle = (process.env.H2_REPORT_TITLE || defaultReportTitle)
 const outputPath = path.join(outputDir, `${reportTitle}.xlsx`);
 const bodyFontSize = 12;
 const headingFontSize = 14;
+const palette = {
+  current: "#EAF5F1",
+  previous: "#FFF4D8",
+  date: "#EEF2F6",
+  white: "#FFFFFF",
+  alternate: "#F7F9FB",
+  text: "#1F2933",
+  muted: "#52616F",
+};
 
 function callTool(name, args, id = 2) {
   const messages = [
@@ -624,6 +633,75 @@ function setColumnWidths(sheet, widths) {
   }
 }
 
+function statusColors(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("off track") || normalized.includes("delayed")) return { fill: "#FDECEC", text: "#A12622" };
+  if (normalized.includes("risk")) return { fill: "#FFF4D8", text: "#8A5A00" };
+  if (normalized.includes("complete") || normalized.includes("done")) return { fill: "#E6F0FF", text: "#1F4E78" };
+  if (normalized.includes("track")) return { fill: "#E8F5E9", text: "#1B6B35" };
+  return { fill: "#EEF2F6", text: "#52616F" };
+}
+
+function headerIndex(headers, names) {
+  const wanted = Array.isArray(names) ? names : [names];
+  return headers.findIndex((header) => wanted.includes(header));
+}
+
+function formatRange(sheet, address, format) {
+  sheet.getRange(address).format = {
+    font: { size: bodyFontSize, color: palette.text },
+    wrapText: true,
+    verticalAlignment: "top",
+    ...format,
+  };
+}
+
+function applyStandardColorCoding(sheet, headers, rows) {
+  const currentStart = headerIndex(headers, "Current Status");
+  const currentEnd = headerIndex(headers, "Current Commentary");
+  const previousStart = headerIndex(headers, "Previous Status");
+  const previousEnd = headerIndex(headers, "Previous Commentary");
+  const currentStatus = headerIndex(headers, ["Current Status", "Status"]);
+  const previousStatus = headerIndex(headers, "Previous Status");
+  const status = headerIndex(headers, "Status");
+  const dateColumns = ["Status Update Date", "Update Date", "Comment Date"].map((name) => headerIndex(headers, name)).filter((index) => index >= 0);
+  const methodColumns = ["Top-Level Method", "Sub-Method"].map((name) => headerIndex(headers, name)).filter((index) => index >= 0);
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const rowNumber = index + 2;
+    const row = rows[index] || [];
+    formatRange(sheet, `A${rowNumber}:${numToCol(headers.length)}${rowNumber}`, {
+      fill: index % 2 === 0 ? palette.white : palette.alternate,
+    });
+    if (currentStart >= 0 && currentEnd >= currentStart) {
+      formatRange(sheet, `${numToCol(currentStart + 1)}${rowNumber}:${numToCol(currentEnd + 1)}${rowNumber}`, { fill: palette.current });
+    }
+    if (previousStart >= 0 && previousEnd >= previousStart) {
+      formatRange(sheet, `${numToCol(previousStart + 1)}${rowNumber}:${numToCol(previousEnd + 1)}${rowNumber}`, { fill: palette.previous });
+    }
+    for (const column of dateColumns) {
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        fill: palette.date,
+        font: { size: bodyFontSize, color: palette.muted },
+      });
+    }
+    for (const column of [currentStatus, previousStatus, status].filter((value, idx, arr) => value >= 0 && arr.indexOf(value) === idx)) {
+      const colors = statusColors(row[column]);
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        fill: colors.fill,
+        font: { color: colors.text, bold: true, size: bodyFontSize },
+        horizontalAlignment: "center",
+        verticalAlignment: "center",
+      });
+    }
+    for (const column of methodColumns) {
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        font: { color: palette.text, bold: true, size: bodyFontSize },
+      });
+    }
+  }
+}
+
 function writeSheet(name, headers, rows, widths) {
   const sheet = workbook.worksheets.add(name);
   setValues(sheet, "A1", [headers]);
@@ -633,6 +711,7 @@ function writeSheet(name, headers, rows, widths) {
     sheet.freezePanes = { rows: 1 };
   } catch {}
   setColumnWidths(sheet, widths);
+  applyStandardColorCoding(sheet, headers, rows);
   styleHeader(sheet.getRange(`A1:${numToCol(headers.length)}1`));
   return sheet;
 }

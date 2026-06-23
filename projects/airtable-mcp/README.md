@@ -219,6 +219,7 @@ All Excel reports created from this project should follow the current requested-
 - Format multi-item cells as hyphen bullets or numbered lists when a cell contains several pointers.
 - Top-level method sheets must include the top-level owner column as `Method Owner Name`.
 - Sub-method sheets and supporting-method owner columns must include supporting owners as `Owner - Supporting Method` wherever that Airtable field is applicable.
+- For sub-method/supporting-method rows, populate the visible `Team` column from Airtable `Supporting Methods -> Team - Supporting Method`; do not use the H2 value `Team` field for sub-method rows.
 - Treat owner-style fields, including `Method Owner Name` and `Owner - Supporting Method`, as multi-item cells when multiple names are extracted.
 - When an all-H2 detailed workbook is explicitly requested, structure `Overview` with `Report Summary` first and `H2 Value Summary` below it, ordered by H2 order.
 - Do not include a separate `Latest Comments` column in detailed workbooks.

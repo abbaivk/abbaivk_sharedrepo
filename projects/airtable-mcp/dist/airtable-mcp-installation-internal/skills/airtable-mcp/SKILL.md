@@ -73,6 +73,8 @@ For Airtable Excel extractions in this project, use live Airtable data and the c
 
 Default method extracts should use only the business sheets `Top-Level Methods` and `Sub-Level Methods`. Keep the user's requested columns, including `H2 Order`, `H2 Value`, method name, reporting period, owner, status owner, current status/actual/commentary, previous status/actual/commentary, and status update date. Add `Sub-Level Method` only on the sub-level sheet when needed to identify rows.
 
+For sub-method/supporting-method rows, populate the visible `Team` column from Airtable `Supporting Methods -> Team - Supporting Method`; do not use the H2 value `Team` field for sub-method rows.
+
 Use the project color standard for readable hierarchy:
 
 - Main column header row: dark navy `#1F4E78` with white bold text.

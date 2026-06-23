@@ -4,7 +4,7 @@ import path from "node:path";
 import { SpreadsheetFile, Workbook } from "@oai/artifact-tool";
 
 const projectDir = "/Users/abbaivk/Documents/Codex Project/projects/airtable-mcp";
-const proxy = "/Users/abbaivk/.codex/bin/airtable-mcp-keychain-proxy";
+const proxy = path.join(projectDir, "build", "airtable-mcp-proxy.mjs");
 const bundledNodeBin = "/Users/abbaivk/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/bin";
 const env = {
   ...process.env,
@@ -22,6 +22,15 @@ const outputName = `${reportingPeriod
 const outputPath = path.join(outputDir, outputName);
 const bodyFontSize = 12;
 const headingFontSize = 14;
+const palette = {
+  current: "#EAF5F1",
+  previous: "#FFF4D8",
+  date: "#EEF2F6",
+  white: "#FFFFFF",
+  alternate: "#F7F9FB",
+  text: "#1F2933",
+  muted: "#52616F",
+};
 
 function callTool(name, args, id = 2) {
   const messages = [
@@ -313,6 +322,7 @@ function subContext(subRecord) {
   const parentTop = topById.get(linkedIds(raw(subRecord, sub.parent))[0]);
   return {
     ...topContext(parentTop),
+    team: join(raw(subRecord, sub.team)),
     subMethod: cleanReportText(raw(subRecord, sub.method)),
   };
 }
@@ -357,7 +367,6 @@ const smUpdateRows = smUpdates
       obstacles: raw(record, sm.obstacles),
       owner: join(raw(record, sm.owner)) || join(raw(subRecord, sub.owner)) || "Not specified",
       statusOwner: join(raw(record, sm.statusOwner)) || join(raw(subRecord, sub.statusOwner)) || "Not specified",
-      subMethodTeam: join(raw(subRecord, sub.team)),
       measure: raw(subRecord, sub.measure),
       fy26Measure: raw(subRecord, sub.fy26Measure),
     };
@@ -485,6 +494,75 @@ function setColumnWidths(sheet, widths) {
   }
 }
 
+function statusColors(status) {
+  const normalized = String(status || "").toLowerCase();
+  if (normalized.includes("off track") || normalized.includes("delayed")) return { fill: "#FDECEC", text: "#A12622" };
+  if (normalized.includes("risk")) return { fill: "#FFF4D8", text: "#8A5A00" };
+  if (normalized.includes("complete") || normalized.includes("done")) return { fill: "#E6F0FF", text: "#1F4E78" };
+  if (normalized.includes("track")) return { fill: "#E8F5E9", text: "#1B6B35" };
+  return { fill: "#EEF2F6", text: "#52616F" };
+}
+
+function headerIndex(headers, names) {
+  const wanted = Array.isArray(names) ? names : [names];
+  return headers.findIndex((header) => wanted.includes(header));
+}
+
+function formatRange(sheet, address, format) {
+  sheet.getRange(address).format = {
+    font: { size: bodyFontSize, color: palette.text },
+    wrapText: true,
+    verticalAlignment: "top",
+    ...format,
+  };
+}
+
+function applyStandardColorCoding(sheet, headers, rows) {
+  const currentStart = headerIndex(headers, "Current Status");
+  const currentEnd = headerIndex(headers, "Current Commentary");
+  const previousStart = headerIndex(headers, "Previous Status");
+  const previousEnd = headerIndex(headers, "Previous Commentary");
+  const currentStatus = headerIndex(headers, ["Current Status", "Status"]);
+  const previousStatus = headerIndex(headers, "Previous Status");
+  const status = headerIndex(headers, "Status");
+  const dateColumns = ["Status Update Date", "Update Date", "Comment Date"].map((name) => headerIndex(headers, name)).filter((index) => index >= 0);
+  const methodColumns = ["Top-Level Method", "Sub-Method"].map((name) => headerIndex(headers, name)).filter((index) => index >= 0);
+
+  for (let index = 0; index < rows.length; index += 1) {
+    const rowNumber = index + 2;
+    const row = rows[index] || [];
+    formatRange(sheet, `A${rowNumber}:${numToCol(headers.length)}${rowNumber}`, {
+      fill: index % 2 === 0 ? palette.white : palette.alternate,
+    });
+    if (currentStart >= 0 && currentEnd >= currentStart) {
+      formatRange(sheet, `${numToCol(currentStart + 1)}${rowNumber}:${numToCol(currentEnd + 1)}${rowNumber}`, { fill: palette.current });
+    }
+    if (previousStart >= 0 && previousEnd >= previousStart) {
+      formatRange(sheet, `${numToCol(previousStart + 1)}${rowNumber}:${numToCol(previousEnd + 1)}${rowNumber}`, { fill: palette.previous });
+    }
+    for (const column of dateColumns) {
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        fill: palette.date,
+        font: { size: bodyFontSize, color: palette.muted },
+      });
+    }
+    for (const column of [currentStatus, previousStatus, status].filter((value, idx, arr) => value >= 0 && arr.indexOf(value) === idx)) {
+      const colors = statusColors(row[column]);
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        fill: colors.fill,
+        font: { color: colors.text, bold: true, size: bodyFontSize },
+        horizontalAlignment: "center",
+        verticalAlignment: "center",
+      });
+    }
+    for (const column of methodColumns) {
+      formatRange(sheet, `${numToCol(column + 1)}${rowNumber}`, {
+        font: { color: palette.text, bold: true, size: bodyFontSize },
+      });
+    }
+  }
+}
+
 function writeSheet(name, headers, rows, widths) {
   const sheet = workbook.worksheets.add(name);
   setValues(sheet, "A1", [headers]);
@@ -494,6 +572,7 @@ function writeSheet(name, headers, rows, widths) {
     sheet.freezePanes = { rows: 1 };
   } catch {}
   setColumnWidths(sheet, widths);
+  applyStandardColorCoding(sheet, headers, rows);
   styleHeader(sheet.getRange(`A1:${numToCol(headers.length)}1`));
   return sheet;
 }
@@ -601,7 +680,6 @@ writeSheet(
     "Sub-Method",
     "Owner - Supporting Method",
     "Status Owner",
-    "Sub-Method Team",
     "Measure Description",
     "FY26 Measure",
     "Current Status",
@@ -633,7 +711,6 @@ writeSheet(
     row.subMethod,
     row.owner,
     row.statusOwner,
-    row.subMethodTeam,
     row.measure,
     row.fy26Measure,
     row.currentStatus,
@@ -665,28 +742,27 @@ writeSheet(
     F: 420,
     G: 220,
     H: 220,
-    I: 220,
-    J: 420,
-    K: 360,
-    L: 150,
-    M: 280,
-    N: 420,
-    O: 150,
-    P: 280,
-    Q: 420,
-    R: 160,
-    S: 180,
-    T: 120,
-    U: 110,
-    V: 180,
-    W: 420,
-    X: 320,
-    Y: 260,
-    Z: 220,
-    AA: 260,
+    I: 420,
+    J: 360,
+    K: 150,
+    L: 280,
+    M: 420,
+    N: 150,
+    O: 280,
+    P: 420,
+    Q: 160,
+    R: 180,
+    S: 120,
+    T: 110,
+    U: 180,
+    V: 420,
+    W: 320,
+    X: 260,
+    Y: 220,
+    Z: 260,
+    AA: 220,
     AB: 220,
-    AC: 220,
-    AD: 260,
+    AC: 260,
   },
 );
 
@@ -731,10 +807,10 @@ console.log(topInspect.ndjson);
 
 const subInspect = await workbook.inspect({
   kind: "table",
-  range: "Sub-Methods!A1:AD8",
+  range: "Sub-Methods!A1:AC8",
   include: "values",
   tableMaxRows: 10,
-  tableMaxCols: 31,
+  tableMaxCols: 30,
 });
 console.log(subInspect.ndjson);
 
@@ -756,7 +832,7 @@ console.log(errors.ndjson);
 
 await workbook.render({ sheetName: "Overview", range: "A1:I26", format: "png", scale: 2 });
 await workbook.render({ sheetName: "Top-Level Methods", range: "A1:T8", format: "png", scale: 2 });
-await workbook.render({ sheetName: "Sub-Methods", range: "A1:AD8", format: "png", scale: 2 });
+await workbook.render({ sheetName: "Sub-Methods", range: "A1:AC8", format: "png", scale: 2 });
 await workbook.render({ sheetName: "TL Dated Updates", range: "A1:J12", format: "png", scale: 2 });
 await workbook.render({ sheetName: "SM Dated Updates", range: "A1:K12", format: "png", scale: 2 });
 await workbook.render({ sheetName: "Airtable Record Comments", range: "A1:H5", format: "png", scale: 2 });
